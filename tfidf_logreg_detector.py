@@ -4,7 +4,6 @@ Module untuk deteksi fake news menggunakan model TF-IDF + Logistic Regression
 """
 
 import os
-import random
 import joblib
 import numpy as np
 from typing import Dict, Any, List, Union
@@ -79,6 +78,28 @@ class TfidfLogregDetector:
             self.model_info['status'] = f'Error: {str(e)}'
             return False
     
+    @staticmethod
+    def _class_indices(classes) -> tuple:
+        """Petakan indeks probabilitas ke (FAKE, REAL) dari classes_
+        model, bukan asumsi posisi. Konvensi latih: 1=FAKE, 0=REAL."""
+        labels = list(classes)
+        lowered = [str(c).lower() for c in labels]
+
+        def find(want_num, want_names):
+            if want_num in labels:
+                return labels.index(want_num)
+            for name in want_names:
+                if name in lowered:
+                    return lowered.index(name)
+            return None
+
+        idx_fake = find(1, ['fake'])
+        idx_real = find(0, ['real'])
+        if idx_fake is None or idx_real is None or idx_fake == idx_real:
+            # Fallback terakhir: asumsi lama [REAL, FAKE]
+            idx_fake, idx_real = 1, 0
+        return idx_fake, idx_real
+
     def predict(self, text: Union[str, List[str]]) -> Dict[str, Any]:
         """
         Melakukan prediksi teks menggunakan model TF-IDF+LogReg.
@@ -99,25 +120,32 @@ class TfidfLogregDetector:
             # Lakukan prediksi menggunakan pipeline
             probabilities = self.model.predict_proba(texts)
             predictions = self.model.predict(texts)
-            
+
+            # Petakan indeks dari classes_ model (robust, bukan asumsi posisi)
+            classes = list(self.model.named_steps['logreg'].classes_)
+            idx_fake, idx_real = self._class_indices(classes)
+            fake_label = classes[idx_fake]
+
+            def scale(i):
+                f = float(probabilities[i][idx_fake])
+                r = float(probabilities[i][idx_real])
+                return f, r
+
             # Format hasil
             if isinstance(text, str):
                 # Single prediction
-                # Asumsi indeks 1 adalah kelas 'FAKE' dan 0 adalah 'REAL'
-                # Cek urutan kelas di model jika perlu: self.model.classes_
-                fake_prob = probabilities[0][1]
-                real_prob = probabilities[0][0]
-                prediction = 'FAKE' if predictions[0] == 1 else 'REAL'
-                
+                fake_prob, real_prob = scale(0)
+                prediction = 'FAKE' if predictions[0] == fake_label else 'REAL'
+
                 # Get important words for this prediction
                 explanation = self.explain_prediction(text)
-                
+
                 return {
                     'prediction': prediction,
                     'confidence': max(fake_prob, real_prob),
                     'probabilities': {
-                        'fake': float(fake_prob),
-                        'real': float(real_prob)
+                        'FAKE': fake_prob,
+                        'REAL': real_prob
                     },
                     'important_words': explanation.get('important_words', []),
                     'model_info': self.model_info
@@ -126,20 +154,18 @@ class TfidfLogregDetector:
                 # Batch prediction
                 results = []
                 for i, (pred, prob) in enumerate(zip(predictions, probabilities)):
-                    # Asumsi indeks 1 adalah kelas 'FAKE' dan 0 adalah 'REAL'
-                    fake_prob = prob[1]
-                    real_prob = prob[0]
-                    
+                    fake_prob, real_prob = scale(i)
+
                     # Get important words for this prediction
                     explanation = self.explain_prediction(texts[i])
-                    
+
                     results.append({
                         'text': texts[i],
-                        'prediction': 'FAKE' if pred == 1 else 'REAL',
+                        'prediction': 'FAKE' if pred == fake_label else 'REAL',
                         'confidence': max(fake_prob, real_prob),
                         'probabilities': {
-                            'fake': float(fake_prob),
-                            'real': float(real_prob)
+                            'FAKE': fake_prob,
+                            'REAL': real_prob
                         },
                         'important_words': explanation.get('important_words', []),
                         'model_info': self.model_info
@@ -154,7 +180,7 @@ class TfidfLogregDetector:
                 return {
                     'prediction': 'ERROR',
                     'confidence': 0.0,
-                    'probabilities': {'fake': 0.0, 'real': 0.0},
+                    'probabilities': {'FAKE': 0.0, 'REAL': 0.0},
                     'model_info': self.model_info,
                     'error': error_msg
                 }
@@ -163,7 +189,7 @@ class TfidfLogregDetector:
                     'text': t,
                     'prediction': 'ERROR',
                     'confidence': 0.0,
-                    'probabilities': {'fake': 0.0, 'real': 0.0},
+                    'probabilities': {'FAKE': 0.0, 'REAL': 0.0},
                     'model_info': self.model_info,
                     'error': error_msg
                 } for t in texts]

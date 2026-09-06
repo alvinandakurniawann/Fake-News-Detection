@@ -4,6 +4,7 @@ Aplikasi Streamlit News Scraper & Fake News Detector.
 Presentasi via ui.py; alur ekstraksi, deteksi, dan riwayat tidak diubah.
 """
 
+import hashlib
 import json
 from datetime import datetime
 
@@ -125,6 +126,12 @@ def main():
         st.session_state.prediction_result = None
     if 'explanation' not in st.session_state:
         st.session_state.explanation = None
+    if 'last_fp' not in st.session_state:
+        st.session_state.last_fp = None
+    if 'fp_notice' not in st.session_state:
+        st.session_state.fp_notice = None
+    if 'current_fp' not in st.session_state:
+        st.session_state.current_fp = None
 
     # Sidebar configuration
     setup_sidebar()
@@ -253,6 +260,31 @@ def single_check_tab(extractor, preprocessor, history_db, preprocessing_steps):
         display_explanation()
 
 
+def _note_extraction(url_input, result):
+    """Sidik teks hasil ekstraksi; deteksi drift antar-ekstraksi URL sama.
+
+    Model deterministik: teks sama SELALU vonis sama. Bila vonis berubah,
+    pasti karena teksnya berubah — sidik ini buktinya.
+    """
+    full = f"{result.get('title', '')}\n{result.get('content', '')}"
+    fp = hashlib.sha256(full.encode('utf-8')).hexdigest()[:10]
+    nwords = len(full.split())
+    prev = st.session_state.get('last_fp')
+    if prev and prev.get('url') == url_input:
+        if prev.get('hash') == fp:
+            st.session_state['fp_notice'] = (
+                'same', 'Teks identik dengan ekstraksi sebelumnya — vonis seharusnya sama.')
+        else:
+            st.session_state['fp_notice'] = (
+                'diff',
+                f"Teks berubah sejak ekstraksi lalu ({prev.get('nwords', 0)} → {nwords} kata). "
+                "Situs memutar/memutakhirkan konten — vonis bisa ikut berubah.")
+    else:
+        st.session_state['fp_notice'] = None
+    st.session_state['last_fp'] = {'url': url_input, 'hash': fp, 'nwords': nwords}
+    st.session_state['current_fp'] = {'hash': fp, 'nwords': nwords}
+
+
 def extract_only(url_input, extractor):
     """Extract news without detection"""
     if url_input:
@@ -261,6 +293,7 @@ def extract_only(url_input, extractor):
 
             if result['success']:
                 st.session_state.extracted_data = result
+                _note_extraction(url_input, result)
                 st.success("Ekstraksi berhasil.")
             else:
                 st.error(f"Gagal mengekstrak: {result['error']}")
@@ -276,6 +309,7 @@ def extract_and_detect(url_input, extractor, preprocessor, detector, history_db,
             result = extractor.extract_from_url(url_input)
             if result['success']:
                 st.session_state.extracted_data = result
+                _note_extraction(url_input, result)
                 # Preprocess
                 full_text = f"{result['title']} {result['content']}"
                 processed_text = preprocessor.preprocess_pipeline(full_text, preprocessing_steps)
@@ -350,6 +384,20 @@ def display_results():
             f"Tanggal: {data.get('publish_date', 'N/A')}</p>",
             unsafe_allow_html=True,
         )
+        cfp = st.session_state.get('current_fp')
+        if cfp:
+            st.markdown(
+                f"<p class=\"fnd-meta\">Sidik teks: <span class=\"mono\">{cfp['hash']}</span> · "
+                f"{cfp['nwords']} kata — sidik sama berarti teks sama, vonis pasti sama.</p>",
+                unsafe_allow_html=True,
+            )
+        notice = st.session_state.get('fp_notice')
+        if notice:
+            kind, text = notice
+            if kind == 'diff':
+                st.warning(text)
+            else:
+                st.caption(text)
         if data.get('url'):
             st.markdown(f"[Buka artikel asli]({data['url']})")
 
@@ -440,6 +488,13 @@ def display_results():
 
                 if 'probabilities' in prediction and prediction['probabilities'] is not None:
                     probability_bars(prediction['probabilities'])
+                    probs = prediction['probabilities']
+                    f = probs.get('FAKE', probs.get('fake', 0.5))
+                    r = probs.get('REAL', probs.get('real', 0.5))
+                    if abs(f - r) < 0.2:
+                        st.caption(
+                            f"Selisih probabilitas hanya {abs(f - r):.0%} — vonis mepet; "
+                            "perubahan kecil pada teks bisa membaliknya.")
             else:
                 st.warning("Data prediksi tidak lengkap.")
     except Exception as e:

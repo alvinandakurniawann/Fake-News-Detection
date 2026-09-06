@@ -3,10 +3,27 @@
 Module untuk ekstraksi konten berita dari berbagai situs berita 
 """
 
+import re
+
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 from datetime import datetime
+
+
+# Paragraf promosi/navigasi yang diputar situs (berubah-ubah tiap fetch
+# dan meracuni vonis): "Baca juga", ajakan unduh/follow, timestamp.
+_PROMO_PATTERNS = [
+    r'^(baca juga|simak juga|lihat juga|tonton juga|baca:|simak:|selengkapnya)',
+    r'(download|unduh).{0,25}aplikasi',
+    r'^(follow|ikuti|like).{0,40}(instagram|twitter|\bx\b|facebook|youtube|tiktok|kanal)',
+    r'^klik\s',
+    r'^(iklan|advertisement|sponsored|ads)',
+    r'(newsletter|berlangganan).{0,20}(gratis|sekarang|email)',
+    r'dengarkan.{0,20}(audio|podcast|berita ini)',
+    r'bagikan.{0,20}(artikel|berita|tulisan) ini',
+]
+_SHORT_META_PATTERN = r'(\d+\s*(menit|jam|hari|detik).{0,12}lalu|^.{0,30}(wib|wita|wit)\.?$)'
 
 
 class NewsExtractor:
@@ -16,6 +33,27 @@ class NewsExtractor:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+
+    @staticmethod
+    def _join_paragraphs(paragraphs) -> str:
+        """Gabung <p> menjadi teks stabil: buang promo berputar,
+        buang timestamp pendek, dedupe, rapikan spasi."""
+        out = []
+        seen = set()
+        for p in paragraphs:
+            t = re.sub(r'\s+', ' ', p.get_text()).strip()
+            if not t:
+                continue
+            low = t.lower()
+            if any(re.search(rx, low) for rx in _PROMO_PATTERNS):
+                continue
+            if len(t) < 40 and re.search(_SHORT_META_PATTERN, low):
+                continue
+            if low in seen:
+                continue
+            seen.add(low)
+            out.append(t)
+        return ' '.join(out)
 
     def extract_from_url(self, url):
         """Extract title and content from news URL"""
@@ -75,8 +113,7 @@ class NewsExtractor:
         # Content extraction
         content_elem = soup.find('div', class_='detail__body-text') or soup.find('div', class_='itp_bodycontent')
         if content_elem:
-            paragraphs = content_elem.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+            content = self._join_paragraphs(content_elem.find_all('p'))
         
         return title, content
     
@@ -93,8 +130,7 @@ class NewsExtractor:
         # Content extraction
         content_elem = soup.find('div', class_='read__content') or soup.find('div', class_='content')
         if content_elem:
-            paragraphs = content_elem.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+            content = self._join_paragraphs(content_elem.find_all('p'))
         
         return title, content
     
@@ -111,8 +147,7 @@ class NewsExtractor:
         # Content extraction
         content_elem = soup.find('div', class_='content') or soup.find('div', class_='txt-article')
         if content_elem:
-            paragraphs = content_elem.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+            content = self._join_paragraphs(content_elem.find_all('p'))
         
         return title, content
     
@@ -129,8 +164,7 @@ class NewsExtractor:
         # Content extraction
         content_elem = soup.find('div', id='detikdetailtext') or soup.find('div', class_='detail-text')
         if content_elem:
-            paragraphs = content_elem.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+            content = self._join_paragraphs(content_elem.find_all('p'))
         
         return title, content
     
@@ -147,8 +181,7 @@ class NewsExtractor:
         # Content extraction
         content_elem = soup.find('div', class_='article-content-body__item-content') or soup.find('div', class_='article-content')
         if content_elem:
-            paragraphs = content_elem.find_all('p')
-            content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
+            content = self._join_paragraphs(content_elem.find_all('p'))
         
         return title, content
     
@@ -196,10 +229,8 @@ class NewsExtractor:
                 elem = soup.find(selector)
             
             if elem:
-                paragraphs = elem.find_all('p')
-                if paragraphs:
-                    content = ' '.join([p.get_text().strip() for p in paragraphs if p.get_text().strip()])
-                    if content:
-                        break
+                content = self._join_paragraphs(elem.find_all('p'))
+                if content:
+                    break
         
         return title, content

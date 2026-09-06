@@ -38,7 +38,9 @@ def process_batch_urls(urls: List[str], extractor, preprocessor, detector,
                     if 'important_words' in prediction_result:
                         important_words = prediction_result['important_words']
                     
-                    # Combine results
+                    # Combine results (kunci probabilitas uppercase;
+                    # .get ganda agar tahan format lama bila model diganti)
+                    probs = prediction_result['probabilities']
                     result = {
                         'url': url,
                         'title': extraction_result['title'],
@@ -46,8 +48,8 @@ def process_batch_urls(urls: List[str], extractor, preprocessor, detector,
                         'domain': extraction_result['domain'],
                         'prediction': prediction_result['prediction'],
                         'confidence': prediction_result['confidence'],
-                        'fake_probability': prediction_result['probabilities']['fake'],
-                        'real_probability': prediction_result['probabilities']['real'],
+                        'fake_probability': probs.get('FAKE', probs.get('fake', 0.0)),
+                        'real_probability': probs.get('REAL', probs.get('real', 0.0)),
                         'important_words': important_words,
                         'status': 'success'
                     }

@@ -210,8 +210,7 @@ def setup_sidebar():
                 "- **clean**: lowercase, strip URLs and emails\n"
                 "- **punctuation**: remove punctuation\n"
                 "- **tokenize**: split text into words\n"
-                "- **stopwords**: drop common English words\n"
-                "- **stem**: reduce to root form (off by default: model vocabulary is unstemmed)"
+                "- **stopwords**: drop common English words"
             )
 
 

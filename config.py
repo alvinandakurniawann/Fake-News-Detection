@@ -71,6 +71,14 @@ class Config:
                 "punctuation",
                 "tokenize",
                 "stopwords"
+            ],
+            # Daftar opsi yang ditawarkan di sidebar. 'stem' disengaja
+            # tidak ada: mengaktifkannya merusak vonis model ini.
+            "available_preprocessing_steps": [
+                "clean",
+                "punctuation",
+                "tokenize",
+                "stopwords"
             ]
         }
     

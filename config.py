@@ -58,12 +58,14 @@ class Config:
             "history_limit": 1000,
             "cache_ttl": 3600,  # 1 hour
             "supported_domains": [
-                "detik.com",
-                "kompas.com",
-                "tribunnews.com",
-                "cnnindonesia.com",
-                "liputan6.com"
+                "bbc.com",
+                "cnn.com",
+                "reuters.com",
+                "theguardian.com",
+                "apnews.com"
             ],
+            # Tanpa 'stem': kosakata model tidak di-stem (increasing, taking...),
+            # jadi stemming justru merusak kecocokan fitur.
             "preprocessing_defaults": [
                 "clean",
                 "punctuation",

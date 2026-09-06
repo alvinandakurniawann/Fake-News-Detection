@@ -9,7 +9,7 @@ from datetime import datetime
 
 
 def process_batch_urls(urls: List[str], extractor, preprocessor, detector,
-                      preprocessing_steps: List[str]) -> List[Dict[str, Any]]:
+                       preprocessing_steps: List[str], language: str = "english") -> List[Dict[str, Any]]:
     """Process multiple URLs concurrently"""
     results = []
     
@@ -28,7 +28,8 @@ def process_batch_urls(urls: List[str], extractor, preprocessor, detector,
                 if extraction_result['success']:
                     # Preprocess text
                     full_text = f"{extraction_result['title']} {extraction_result['content']}"
-                    processed_text = preprocessor.preprocess_pipeline(full_text, preprocessing_steps)
+                    processed_text = preprocessor.preprocess_pipeline(
+                        full_text, preprocessing_steps, language=language)
                     
                     # Predict
                     prediction_result = detector.predict(processed_text)

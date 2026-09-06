@@ -170,14 +170,14 @@ def hero() -> None:
     st.markdown(
         """
         <div class="fnd-hero">
-          <div class="fnd-kicker">Detektor Hoaks · ID &amp; EN</div>
-          <h1 class="fnd-title">Periksa berita sebelum kamu sebarkan.</h1>
-          <p class="fnd-lede">Tempel tautan berita, model TF-IDF + Logistic Regression menilai
-          keasliannya dan menunjukkan kata-kata yang memengaruhi vonis.</p>
+          <div class="fnd-kicker">Fake News Detector · English</div>
+          <h1 class="fnd-title">Check the news before you share it.</h1>
+          <p class="fnd-lede">Paste a news link and a TF-IDF + Logistic Regression model
+          judges its authenticity — and shows the words behind the verdict.</p>
           <ol class="fnd-steps">
-            <li><span class="n">1</span>Tempel URL berita</li>
-            <li><span class="n">2</span>Ekstrak &amp; deteksi</li>
-            <li><span class="n">3</span>Baca vonis + bukti kata</li>
+            <li><span class="n">1</span>Paste the article URL</li>
+            <li><span class="n">2</span>Extract &amp; detect</li>
+            <li><span class="n">3</span>Read the verdict + word evidence</li>
           </ol>
         </div>
         """,
@@ -194,23 +194,23 @@ def section(title: str, sub: str = "") -> None:
 
 
 def verdict_banner(prediction: str, confidence: float) -> None:
-    """Vonis besar pengganti st.error/st.success generik."""
+    """Big verdict banner replacing generic st.error/st.success."""
     is_fake = str(prediction).upper() == "FAKE"
     cls = "fake" if is_fake else "real"
-    name = "Terindikasi Hoaks" if is_fake else "Terindikasi Valid"
+    name = "Likely Fake" if is_fake else "Likely Real"
     raw = _html.escape(str(prediction))
     note = (
-        "Skor keyakinan di bawah 70% — perlakukan sebagai sinyal awal, "
-        "verifikasi ke sumber primer."
+        "Confidence below 70% — treat this as an early signal and "
+        "verify against primary sources."
         if confidence < 0.7
-        else "Vonis model, bukan kebenaran mutlak — tetap cek sumber primer."
+        else "A model verdict, not ground truth — still check primary sources."
     )
     st.markdown(
         f"""
         <div class="fnd-verdict {cls}" role="status">
-          <div class="v-label">Hasil deteksi · {raw}</div>
+          <div class="v-label">Detection result · {raw}</div>
           <div class="v-name">{name}</div>
-          <div class="v-conf">Keyakinan {confidence:.1%}</div>
+          <div class="v-conf">Confidence {confidence:.1%}</div>
           <div class="v-note">{note}</div>
         </div>
         """,
@@ -219,19 +219,19 @@ def verdict_banner(prediction: str, confidence: float) -> None:
 
 
 def confidence_meter(confidence: float) -> None:
-    """Meter keyakinan HTML: angka besar + bilah + ambang 50/70."""
+    """HTML confidence meter: big number + bar + 50/70 thresholds."""
     pct = max(0.0, min(1.0, confidence)) * 100
     st.markdown(
         f"""
-        <div class="fnd-meter" role="img" aria-label="Skor keyakinan {pct:.1f} persen">
+        <div class="fnd-meter" role="img" aria-label="Confidence score {pct:.1f} percent">
           <div class="m-top">
-            <span class="m-label">Skor keyakinan</span>
+            <span class="m-label">Confidence score</span>
             <span class="m-value">{pct:.1f}%</span>
           </div>
           <div class="m-track">
             <div class="m-fill" style="width:{pct:.1f}%"></div>
-            <div class="m-tick" style="left:50%" title="Ambang keputusan 50%"></div>
-            <div class="m-tick" style="left:70%" title="Ambang andal 70%"></div>
+            <div class="m-tick" style="left:50%" title="Decision threshold 50%"></div>
+            <div class="m-tick" style="left:70%" title="Reliability threshold 70%"></div>
           </div>
           <div class="m-scale"><span>0</span><span>50</span><span>70</span><span>100</span></div>
         </div>
@@ -241,7 +241,7 @@ def confidence_meter(confidence: float) -> None:
 
 
 def probability_bars(probabilities: dict) -> None:
-    """Dua baris probabilitas Hoaks vs Valid."""
+    """Two probability rows: Fake vs Real."""
     prob_dict = {k.upper(): float(v) for k, v in (probabilities or {}).items()}
     fake = prob_dict.get("FAKE", 0.0)
     real = prob_dict.get("REAL", 0.0)
@@ -250,14 +250,14 @@ def probability_bars(probabilities: dict) -> None:
         fake, real = fake / total, real / total
     st.markdown(
         f"""
-        <div class="fnd-prob" role="img" aria-label="Hoaks {fake:.0%}, Valid {real:.0%}">
+        <div class="fnd-prob" role="img" aria-label="Fake {fake:.0%}, Real {real:.0%}">
           <div class="p-row">
-            <span class="p-name">Valid</span>
+            <span class="p-name">Real</span>
             <div class="p-track"><div class="p-fill real" style="width:{real * 100:.1f}%"></div></div>
             <span class="p-val">{real:.1%}</span>
           </div>
           <div class="p-row">
-            <span class="p-name">Hoaks</span>
+            <span class="p-name">Fake</span>
             <div class="p-track"><div class="p-fill fake" style="width:{fake * 100:.1f}%"></div></div>
             <span class="p-val">{fake:.1%}</span>
           </div>
@@ -270,7 +270,7 @@ def probability_bars(probabilities: dict) -> None:
 def prediction_badge(prediction: str) -> str:
     is_fake = str(prediction).upper() == "FAKE"
     cls = "badge-fake" if is_fake else "badge-real"
-    label = "HOAKS" if is_fake else "VALID"
+    label = "FAKE" if is_fake else "REAL"
     return f'<span class="badge {cls}">{label}</span>'
 
 
@@ -287,7 +287,7 @@ def empty_state(text: str) -> None:
 
 
 def friendly_error(context: str, exc: Exception) -> None:
-    """Error ramah untuk pengguna; detail teknis disembunyikan di expander."""
-    st.error(f"{context}. Coba lagi, atau periksa URL dan koneksi.")
-    with st.expander("Detail teknis"):
+    """Friendly error for users; technical detail hidden in an expander."""
+    st.error(f"{context}. Try again, or check the URL and connection.")
+    with st.expander("Technical details"):
         st.code(f"{type(exc).__name__}: {exc}")

@@ -1,7 +1,10 @@
 # main.py
 """
-Aplikasi Streamlit News Scraper & Fake News Detector.
-Presentasi via ui.py; alur ekstraksi, deteksi, dan riwayat tidak diubah.
+Streamlit app: News Scraper & Fake News Detector (English-only).
+Presentation via ui.py; extraction, detection, and history flows unchanged.
+
+NOTE: the TF-IDF model was trained on English news, so the whole app —
+preprocessing language included — is locked to English.
 """
 
 import hashlib
@@ -38,22 +41,25 @@ from ui import (
 from utils import process_batch_urls
 from visualizations import highlight_important_words
 
+# Model language. Must match the training data (English).
+APP_LANGUAGE = "english"
+
 
 @st.cache_resource(show_spinner=False)
 def _get_extractor():
-    """Satu instance dipakai ulang — jangan scrape-ulang setup tiap klik."""
+    """One instance reused — no setup redo on every click."""
     return NewsExtractor()
 
 
 @st.cache_resource(show_spinner=False)
 def _get_preprocessor():
-    return TextPreprocessor()
+    return TextPreprocessor(language=APP_LANGUAGE)
 
 
-@st.cache_resource(show_spinner="Memuat model...")
+@st.cache_resource(show_spinner="Loading model...")
 def _get_detector(model_path, model_type):
-    """Model di-unpickle sekali saja. Tanpa ini, setiap interaksi
-    memuat ulang model + koneksi DB hingga server kehabisan memori."""
+    """Model unpickled once. Without this, every interaction reloads
+    the model + DB connection until the server runs out of memory."""
     if model_type == "tfidf":
         return TfidfLogregDetector(model_path=model_path)
     return None
@@ -67,7 +73,7 @@ def _get_history_db(supabase_url, supabase_key):
 def main():
     """Main application function"""
     st.set_page_config(
-        page_title="Detektor Hoaks",
+        page_title="Fake News Detector",
         page_icon="📰",
         layout="wide"
     )
@@ -76,19 +82,19 @@ def main():
 
     # Validate Supabase configuration
     if not Config.validate_supabase_config():
-        st.error("Konfigurasi Supabase tidak ditemukan.")
+        st.error("Supabase configuration not found.")
         st.info(
-            "Aplikasi membutuhkan Supabase untuk menyimpan riwayat:\n"
-            "1. Buat file `.streamlit/secrets.toml`\n"
-            "2. Isi `SUPABASE_URL` dan `SUPABASE_KEY`."
+            "This app needs Supabase to store history:\n"
+            "1. Create the file `.streamlit/secrets.toml`\n"
+            "2. Fill in `SUPABASE_URL` and `SUPABASE_KEY`."
         )
         st.stop()
 
     # Initialize session state for preprocessing steps if not exists
     if 'preprocessing_steps' not in st.session_state:
-        st.session_state.preprocessing_steps = ['clean', 'punctuation', 'tokenize', 'stopwords', 'stem']
+        st.session_state.preprocessing_steps = ['clean', 'punctuation', 'tokenize', 'stopwords']
 
-    # Initialize components (cached: dibuat sekali, dipakai ulang)
+    # Initialize components (cached: created once, reused)
     extractor = _get_extractor()
     preprocessor = _get_preprocessor()
     st.session_state.preprocessor = preprocessor  # Store in session state
@@ -102,10 +108,10 @@ def main():
     # Initialize detector with the default model
     detector = _get_detector(default_model.get("path", ""), default_model.get("type", ""))
     if default_model.get("type") != "tfidf":
-        st.error(f"Tipe model tidak didukung: {default_model.get('type')}")
+        st.error(f"Unsupported model type: {default_model.get('type')}")
         st.stop()
     if detector is None or not detector.model_loaded:
-        st.error("Gagal menginisialisasi detector default.")
+        st.error("Failed to initialize the default detector.")
         st.stop()
 
     # Store detector and model config in session state
@@ -138,7 +144,7 @@ def main():
     preprocessing_steps = st.session_state.preprocessing_steps
 
     # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["Pemeriksaan", "Batch", "Riwayat", "Analitik"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Check", "Batch", "History", "Analytics"])
 
     with tab1:
         single_check_tab(extractor, preprocessor, history_db, preprocessing_steps)
@@ -164,7 +170,7 @@ def setup_sidebar():
         st.session_state.current_model = {}
 
     with st.sidebar:
-        st.header("Pengaturan")
+        st.header("Settings")
 
         # Display model info - only TF-IDF model is available
         selected_model_info = st.session_state.model_config["available_models"][0]  # Get first (and only) model
@@ -173,15 +179,16 @@ def setup_sidebar():
         # Display model status
         if 'detector' in st.session_state and st.session_state.detector:
             model_info = st.session_state.detector.get_model_info()
-            st.success(f"Model aktif: {model_info.get('name', 'TF-IDF + Logistic Regression')}")
+            st.success(f"Active model: {model_info.get('name', 'TF-IDF + Logistic Regression')}")
+            st.caption("Trained on English news · English pipeline")
             st.caption(f"Path: `{model_info.get('path', 'N/A')}`")
         else:
-            st.warning("Model belum diinisialisasi")
+            st.warning("Model not initialized yet")
 
         st.divider()
 
         # Preprocessing options
-        st.subheader("Tahapan preprocessing")
+        st.subheader("Preprocessing stages")
 
         # Get available preprocessing steps from config or use defaults
         available_steps = Config.get_app_settings().get("available_preprocessing_steps",
@@ -189,7 +196,7 @@ def setup_sidebar():
 
         # Update preprocessing steps in session state
         selected_steps = st.multiselect(
-            "Langkah aktif:",
+            "Active steps:",
             available_steps,
             default=st.session_state.preprocessing_steps
         )
@@ -198,13 +205,13 @@ def setup_sidebar():
         if selected_steps != st.session_state.preprocessing_steps:
             st.session_state.preprocessing_steps = selected_steps
 
-        with st.expander("Arti tiap tahapan"):
+        with st.expander("What each step does"):
             st.markdown(
-                "- **clean**: lowercase, hapus URL dan email\n"
-                "- **punctuation**: hapus tanda baca\n"
-                "- **tokenize**: pecah teks menjadi kata\n"
-                "- **stopwords**: buang kata umum\n"
-                "- **stem**: kembalikan ke kata dasar"
+                "- **clean**: lowercase, strip URLs and emails\n"
+                "- **punctuation**: remove punctuation\n"
+                "- **tokenize**: split text into words\n"
+                "- **stopwords**: drop common English words\n"
+                "- **stem**: reduce to root form (off by default: model vocabulary is unstemmed)"
             )
 
 
@@ -213,12 +220,12 @@ def single_check_tab(extractor, preprocessor, history_db, preprocessing_steps):
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        section("Tautan berita", "Hasil ekstraksi tampil di kanan setelah diproses.")
+        section("News link", "The extraction result appears on the right after processing.")
 
         # Check if URL exists in history
         url_input = st.text_input(
-            "URL berita:",
-            placeholder="https://www.detik.com/..."
+            "News URL:",
+            placeholder="https://www.bbc.com/news/..."
         )
 
         # Supported domains hint
@@ -233,24 +240,24 @@ def single_check_tab(extractor, preprocessor, history_db, preprocessing_steps):
         if url_input:
             existing_record = history_db.check_url_exists(url_input)
             if existing_record:
-                st.info(f"URL ini pernah diperiksa pada {existing_record['checked_at']}")
+                st.info(f"This URL was checked before on {existing_record['checked_at']}")
 
         # Extract and predict buttons
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
-            if st.button("Ekstrak saja", type="secondary", use_container_width=True):
+            if st.button("Extract only", type="secondary", use_container_width=True):
                 extract_only(url_input, extractor)
 
         with col_btn2:
-            if st.button("Ekstrak & deteksi", type="primary", use_container_width=True):
-                # Ambil detector dari session_state
+            if st.button("Extract & detect", type="primary", use_container_width=True):
+                # Take detector from session_state
                 detector = st.session_state.get('detector')
                 if detector:
                     extract_and_detect(url_input, extractor, preprocessor, detector,
                                      history_db, preprocessing_steps)
                 else:
-                    st.error("Detector belum diinisialisasi.")
+                    st.error("Detector not initialized.")
 
     with col2:
         display_results()
@@ -261,10 +268,11 @@ def single_check_tab(extractor, preprocessor, history_db, preprocessing_steps):
 
 
 def _note_extraction(url_input, result):
-    """Sidik teks hasil ekstraksi; deteksi drift antar-ekstraksi URL sama.
+    """Fingerprint the extracted text; flag drift across extractions.
 
-    Model deterministik: teks sama SELALU vonis sama. Bila vonis berubah,
-    pasti karena teksnya berubah — sidik ini buktinya.
+    The model is deterministic: identical text ALWAYS yields an identical
+    verdict. If a verdict changes, the text must have changed — this
+    fingerprint is the proof.
     """
     full = f"{result.get('title', '')}\n{result.get('content', '')}"
     fp = hashlib.sha256(full.encode('utf-8')).hexdigest()[:10]
@@ -273,12 +281,12 @@ def _note_extraction(url_input, result):
     if prev and prev.get('url') == url_input:
         if prev.get('hash') == fp:
             st.session_state['fp_notice'] = (
-                'same', 'Teks identik dengan ekstraksi sebelumnya — vonis seharusnya sama.')
+                'same', 'Text identical to the previous extraction — the verdict should match.')
         else:
             st.session_state['fp_notice'] = (
                 'diff',
-                f"Teks berubah sejak ekstraksi lalu ({prev.get('nwords', 0)} → {nwords} kata). "
-                "Situs memutar/memutakhirkan konten — vonis bisa ikut berubah.")
+                f"Text changed since the last extraction ({prev.get('nwords', 0)} → {nwords} words). "
+                "The site rotates/updates content — the verdict may change with it.")
     else:
         st.session_state['fp_notice'] = None
     st.session_state['last_fp'] = {'url': url_input, 'hash': fp, 'nwords': nwords}
@@ -288,44 +296,45 @@ def _note_extraction(url_input, result):
 def extract_only(url_input, extractor):
     """Extract news without detection"""
     if url_input:
-        with st.spinner("Mengekstrak berita..."):
+        with st.spinner("Extracting news..."):
             result = extractor.extract_from_url(url_input)
 
             if result['success']:
                 st.session_state.extracted_data = result
                 _note_extraction(url_input, result)
-                st.success("Ekstraksi berhasil.")
+                st.success("Extraction succeeded.")
             else:
-                st.error(f"Gagal mengekstrak: {result['error']}")
+                st.error(f"Extraction failed: {result['error']}")
     else:
-        st.warning("Isi URL terlebih dahulu.")
+        st.warning("Enter a URL first.")
 
 
 def extract_and_detect(url_input, extractor, preprocessor, detector, history_db, preprocessing_steps):
     """Extract news and detect fake news"""
     if url_input:
-        with st.spinner("Mengekstrak dan menganalisis..."):
+        with st.spinner("Extracting and analyzing..."):
             # Extract
             result = extractor.extract_from_url(url_input)
             if result['success']:
                 st.session_state.extracted_data = result
                 _note_extraction(url_input, result)
-                # Preprocess
+                # Preprocess (English pipeline — matches training data)
                 full_text = f"{result['title']} {result['content']}"
-                processed_text = preprocessor.preprocess_pipeline(full_text, preprocessing_steps)
+                processed_text = preprocessor.preprocess_pipeline(
+                    full_text, preprocessing_steps, language=APP_LANGUAGE)
                 st.session_state.preprocessed_text = processed_text
-                # Gunakan objek detector dari parameter
+                # Use the detector object from parameters
                 if detector.model_loaded:
                     prediction = detector.predict(processed_text)
                     st.session_state.prediction_result = prediction
                     explanation = detector.explain_prediction(processed_text)
                     st.session_state.explanation = explanation
 
-                    # Normalisasi format prediksi
+                    # Normalize prediction format
                     pred = st.session_state.prediction_result
                     probs = pred['probabilities']
 
-                    # Handle perbedaan format (FAKE/REAL vs fake/real)
+                    # Handle format differences (FAKE/REAL vs fake/real)
                     if 'FAKE' in probs and 'REAL' in probs:
                         fake_prob = probs['FAKE']
                         real_prob = probs['REAL']
@@ -333,11 +342,11 @@ def extract_and_detect(url_input, extractor, preprocessor, detector, history_db,
                         fake_prob = probs['fake']
                         real_prob = probs['real']
                     else:
-                        # Fallback jika format tidak dikenali
+                        # Fallback for unrecognized format
                         fake_prob = 0.5
                         real_prob = 0.5
 
-                    # Pastikan prediction dalam format yang konsisten
+                    # Keep prediction in a consistent format
                     prediction_label = pred['prediction'].upper()
 
                     # Save to history
@@ -353,42 +362,42 @@ def extract_and_detect(url_input, extractor, preprocessor, detector, history_db,
                         'checked_at': datetime.now()
                     }
                     history_db.add_record(history_record)
-                    st.success("Analisis selesai.")
+                    st.success("Analysis complete.")
                 else:
-                    st.error("Model detector belum dimuat.")
+                    st.error("Detector model not loaded.")
             else:
-                st.error(f"Gagal mengekstrak: {result['error']}")
+                st.error(f"Extraction failed: {result['error']}")
     else:
-        st.warning("Isi URL terlebih dahulu.")
+        st.warning("Enter a URL first.")
 
 
 def display_results():
     """Display extraction and prediction results"""
     if 'extracted_data' not in st.session_state or not st.session_state.extracted_data:
-        empty_state("Belum ada data. Tempel URL di kiri lalu jalankan ekstraksi.")
+        empty_state("No data yet. Paste a URL on the left, then run extraction.")
         return
 
     data = st.session_state.extracted_data
 
     # Check if data is valid
     if not isinstance(data, dict) or 'title' not in data or 'content' not in data:
-        st.error("Format data tidak valid, hasil tidak bisa ditampilkan.")
+        st.error("Invalid data format, results cannot be displayed.")
         return
 
     try:
         # Display basic info
-        section("Berita terekstrak")
+        section("Extracted news")
         st.markdown(
-            f"<p class=\"fnd-meta\"><b>{data.get('title', 'Tanpa judul')}</b><br>"
-            f"Sumber: {data.get('domain', 'Tidak diketahui')} · "
-            f"Tanggal: {data.get('publish_date', 'N/A')}</p>",
+            f"<p class=\"fnd-meta\"><b>{data.get('title', 'No title')}</b><br>"
+            f"Source: {data.get('domain', 'Unknown')} · "
+            f"Date: {data.get('publish_date', 'N/A')}</p>",
             unsafe_allow_html=True,
         )
         cfp = st.session_state.get('current_fp')
         if cfp:
             st.markdown(
-                f"<p class=\"fnd-meta\">Sidik teks: <span class=\"mono\">{cfp['hash']}</span> · "
-                f"{cfp['nwords']} kata — sidik sama berarti teks sama, vonis pasti sama.</p>",
+                f"<p class=\"fnd-meta\">Text fingerprint: <span class=\"mono\">{cfp['hash']}</span> · "
+                f"{cfp['nwords']} words — same fingerprint means same text, same verdict.</p>",
                 unsafe_allow_html=True,
             )
         notice = st.session_state.get('fp_notice')
@@ -399,7 +408,7 @@ def display_results():
             else:
                 st.caption(text)
         if data.get('url'):
-            st.markdown(f"[Buka artikel asli]({data['url']})")
+            st.markdown(f"[Open the original article]({data['url']})")
 
         # Add export buttons
         col1, col2 = st.columns(2)
@@ -414,7 +423,7 @@ def display_results():
                 'url': data.get('url', '')
             }]).to_csv(index=False)
             st.download_button(
-                label="Unduh CSV",
+                label="Download CSV",
                 data=csv,
                 file_name=f"news_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
@@ -431,7 +440,7 @@ def display_results():
                 'url': data.get('url', '')
             }
             st.download_button(
-                label="Unduh JSON",
+                label="Download JSON",
                 data=json.dumps(json_data, indent=2, ensure_ascii=False),
                 file_name=f"news_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json",
@@ -441,13 +450,13 @@ def display_results():
         st.divider()
 
         # Create tabs for original and preprocessed content
-        tab1, tab2 = st.tabs(["Teks asli", "Teks preprocess"])
+        tab1, tab2 = st.tabs(["Original text", "Preprocessed text"])
 
         with tab1:
             if data.get('content'):
                 content_box(data['content'])
             else:
-                st.warning("Konten tidak tersedia.")
+                st.warning("No content available.")
 
         with tab2:
             if data.get('content'):
@@ -457,32 +466,32 @@ def display_results():
                 if preprocessed_text:
                     content_box(preprocessed_text, pre=True)
                     st.caption(
-                        f"Telah diproses dengan: {', '.join(st.session_state.get('preprocessing_steps', []))}"
+                        f"Processed with: {', '.join(st.session_state.get('preprocessing_steps', []))}"
                     )
 
                     # Add copy button for preprocessed text
                     st.download_button(
-                        label="Salin teks preprocess",
+                        label="Download preprocessed text",
                         data=preprocessed_text,
                         file_name="preprocessed_text.txt",
                         mime="text/plain"
                     )
                 else:
-                    st.info("Teks preprocess belum ada. Jalankan deteksi untuk melihatnya.")
+                    st.info("No preprocessed text yet. Run detection to see it.")
             else:
-                st.warning("Konten tidak tersedia untuk diproses.")
+                st.warning("No content available to process.")
 
         # Display prediction if available
         if 'prediction_result' in st.session_state and st.session_state.prediction_result:
             prediction = st.session_state.prediction_result
 
-            section("Hasil prediksi")
+            section("Prediction")
 
             # Validate prediction data
             if isinstance(prediction, dict) and 'prediction' in prediction and 'confidence' in prediction:
                 verdict_banner(prediction['prediction'], prediction['confidence'])
 
-                # Meter keyakinan + distribusi probabilitas (HTML, tanpa toolbar)
+                # Confidence meter + probability bars (HTML, no toolbar)
                 if 'confidence' in prediction and prediction['confidence'] is not None:
                     confidence_meter(prediction['confidence'])
 
@@ -493,38 +502,38 @@ def display_results():
                     r = probs.get('REAL', probs.get('real', 0.5))
                     if abs(f - r) < 0.2:
                         st.caption(
-                            f"Selisih probabilitas hanya {abs(f - r):.0%} — vonis mepet; "
-                            "perubahan kecil pada teks bisa membaliknya.")
+                            f"Probability gap is only {abs(f - r):.0%} — a close call; "
+                            "small text changes can flip it.")
             else:
-                st.warning("Data prediksi tidak lengkap.")
+                st.warning("Prediction data is incomplete.")
     except Exception as e:
-        friendly_error("Gagal menampilkan hasil", e)
+        friendly_error("Failed to display results", e)
 
 
 def display_explanation():
     """Display feature explanation"""
     st.divider()
-    section("Bukti kata", "Kata yang memengaruhi vonis model. Arahkan kursor ke kata untuk melihat bobotnya.")
+    section("Word evidence", "Words that swayed the model verdict. Hover a word to see its weight.")
 
     # Get preprocessing steps from session state or use default
     preprocessing_steps = st.session_state.get('preprocessing_steps',
-        ['clean', 'normalize', 'remove_stopwords', 'stem'])
+        ['clean', 'punctuation', 'tokenize', 'stopwords'])
 
     col3, col4 = st.columns([2, 1])
 
     with col3:
-        section("Teks tersorot")
+        section("Highlighted text")
         full_text = f"{st.session_state.extracted_data['title']} {st.session_state.extracted_data['content']}"
 
         # Get preprocessor from session state
         preprocessor = st.session_state.get('preprocessor')
 
         # Show first 2000 characters by default, with option to show more
-        show_full_text = st.checkbox("Tampilkan teks penuh", value=False, key="show_full_text")
+        show_full_text = st.checkbox("Show full text", value=False, key="show_full_text")
 
         if show_full_text:
             text_to_show = full_text
-            show_less = "(Menampilkan teks penuh)"
+            show_less = "(Showing full text)"
         else:
             text_to_show = full_text[:2000] + ("..." if len(full_text) > 2000 else "")
             show_less = ""
@@ -546,10 +555,10 @@ def display_explanation():
 
         # Show word count info
         word_count = len(full_text.split())
-        st.caption(f"Total {word_count} kata · tampil: {'semua' if show_full_text or len(full_text) <= 2000 else '2000 karakter pertama'}")
+        st.caption(f"{word_count} words total · showing: {'all' if show_full_text or len(full_text) <= 2000 else 'first 2000 characters'}")
 
     with col4:
-        section("Bobot kata")
+        section("Word weights")
         words = st.session_state.explanation['important_words']
         if words:
             words_df = pd.DataFrame(words)
@@ -562,59 +571,60 @@ def display_explanation():
             # Add color legend
             st.markdown(
                 """<div class="hl-legend">
-                <span><i style="background:rgba(249,115,22,0.5)"></i>ke hoaks</span>
-                <span><i style="background:rgba(34,211,238,0.5)"></i>ke valid</span>
+                <span><i style="background:rgba(249,115,22,0.5)"></i>toward fake</span>
+                <span><i style="background:rgba(34,211,238,0.5)"></i>toward real</span>
                 </div>""",
                 unsafe_allow_html=True,
             )
         else:
-            st.info("Penjelasan fitur tidak tersedia untuk model ini.")
+            st.info("Feature explanation not available for this model.")
 
 
 def batch_processing_tab(extractor, preprocessor, history_db, preprocessing_steps):
     """Batch processing tab"""
-    section("Proses banyak URL", "Satu URL per baris. Maksimal 20 URL per batch.")
+    section("Batch URL processing", "One URL per line. Max 20 URLs per batch.")
 
     urls_input = st.text_area(
-        "Daftar URL:",
+        "URL list:",
         height=150,
-        placeholder="https://www.detik.com/...\nhttps://www.kompas.com/..."
+        placeholder="https://www.bbc.com/news/...\nhttps://www.reuters.com/..."
     )
 
-    if st.button("Proses batch", type="primary"):
+    if st.button("Process batch", type="primary"):
         if urls_input:
             urls = [url.strip() for url in urls_input.split('\n') if url.strip()]
 
             if urls:
-                # Ambil detector dari session_state
+                # Take detector from session_state
                 detector = st.session_state.get('detector')
                 if detector and detector.model_loaded:
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
-                    with st.spinner(f"Memproses {len(urls)} URL..."):
-                        # Process batch menggunakan detector dari session_state
+                    with st.spinner(f"Processing {len(urls)} URLs..."):
+                        # Process batch using the detector from session_state
                         results = process_batch_urls(
-                            urls, extractor, preprocessor, detector, preprocessing_steps
+                            urls, extractor, preprocessor, detector, preprocessing_steps,
+                            language=APP_LANGUAGE
                         )
 
                         # Update progress
                         progress_bar.progress(1.0)
-                        status_text.text(f"Selesai memproses {len(results)} URL")
+                        status_text.text(f"Processed {len(results)} URLs")
 
                     # Display results
                     display_batch_results(results, history_db)
                 elif detector:
-                    st.error("Model detector belum dimuat.")
+                    st.error("Detector model not loaded.")
                 else:
-                    st.error("Detector belum diinisialisasi.")
+                    st.error("Detector not initialized.")
         else:
-            st.warning("Isi minimal satu URL.")
+            st.warning("Enter at least one URL.")
 
 
 def display_batch_results(results, history_db):
     """Display batch processing results"""
-    section("Hasil batch")
+    section("Batch results")
 
     # Summary metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -625,22 +635,22 @@ def display_batch_results(results, history_db):
     avg_confidence = np.mean([r.get('confidence', 0) for r in results if r.get('confidence')])
 
     with col1:
-        st.metric("Total URL", len(results))
+        st.metric("Total URLs", len(results))
     with col2:
-        st.metric("Berhasil", success_count)
+        st.metric("Succeeded", success_count)
     with col3:
-        st.metric("Hoaks", fake_count)
+        st.metric("Fake", fake_count)
     with col4:
-        st.metric("Rata-rata keyakinan", f"{avg_confidence:.0%}")
+        st.metric("Avg confidence", f"{avg_confidence:.0%}")
 
     # Display detailed results for each URL
     for idx, result in enumerate(results, 1):
-        with st.expander(f"{idx}. {result.get('title', 'Tanpa judul')}", expanded=False):
+        with st.expander(f"{idx}. {result.get('title', 'No title')}", expanded=False):
             col1, col2 = st.columns([1, 1])
 
             with col1:
                 # Display URL and domain
-                st.markdown(f"[Buka artikel]({result.get('url', '')}) · {result.get('domain', 'N/A')}")
+                st.markdown(f"[Open article]({result.get('url', '')}) · {result.get('domain', 'N/A')}")
 
                 # Display prediction and confidence
                 if result.get('status') == 'success':
@@ -654,22 +664,22 @@ def display_batch_results(results, history_db):
                         unsafe_allow_html=True,
                     )
 
-                    # Meter keyakinan (HTML, tanpa toolbar)
+                    # Confidence meter (HTML, no toolbar)
                     confidence_meter(confidence)
 
-                    # Distribusi probabilitas (HTML, tanpa toolbar)
+                    # Probability distribution (HTML, no toolbar)
                     probability_bars({
                         'FAKE': result.get('fake_probability', 0),
                         'REAL': result.get('real_probability', 0)
                     })
                 else:
-                    st.error(f"Gagal memproses: {result.get('error', 'Error tidak diketahui')}")
+                    st.error(f"Processing failed: {result.get('error', 'Unknown error')}")
 
             with col2:
                 if result.get('status') == 'success' and 'content' in result:
                     # Display important words if available
                     if 'important_words' in result:
-                        section("Kata berpengaruh")
+                        section("Influential words")
                         important_words = result['important_words']
 
                         # Display word importance table
@@ -693,20 +703,20 @@ def display_batch_results(results, history_db):
 
                         # Add 'Show more' functionality
                         show_full_text = st.checkbox(
-                            "Tampilkan teks penuh",
+                            "Show full text",
                             value=False,
                             key=f"show_full_{result['url']}"
                         )
 
                         if show_full_text:
                             text_to_show = full_text
-                            show_less = "(Menampilkan teks penuh)"
+                            show_less = "(Showing full text)"
                         else:
                             text_to_show = full_text[:2000] + ("..." if len(full_text) > 2000 else "")
                             show_less = ""
 
                         # Display highlighted text
-                        section("Teks tersorot")
+                        section("Highlighted text")
 
                         # Get preprocessor from session state
                         preprocessor = st.session_state.get('preprocessor')
@@ -729,18 +739,18 @@ def display_batch_results(results, history_db):
 
                         # Show word count info
                         word_count = len(full_text.split())
-                        st.caption(f"Total {word_count} kata")
+                        st.caption(f"{word_count} words total")
 
     # Save successful results to history
     results_df = pd.DataFrame([r for r in results if r.get('status') == 'success'])
     if not results_df.empty:
-        section("Tabel ringkasan")
+        section("Summary table")
         st.dataframe(results_df[['url', 'domain', 'prediction', 'confidence']], hide_index=True)
 
         # Download results
         csv = results_df.to_csv(index=False)
         st.download_button(
-            label="Unduh hasil CSV",
+            label="Download results CSV",
             data=csv,
             file_name=f"batch_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
@@ -764,7 +774,7 @@ def display_batch_results(results, history_db):
 
 def history_tab(history_db):
     """History tab"""
-    section("Riwayat pemeriksaan", "Seratus pemeriksaan terakhir, bisa disaring dan dicari.")
+    section("Check history", "Last 100 checks. Filter and search included.")
 
     # Get history
     history_df = history_db.get_history(limit=100)
@@ -772,7 +782,7 @@ def history_tab(history_db):
     if not history_df.empty:
         display_history(history_df)
     else:
-        empty_state("Belum ada riwayat. Periksa beberapa URL terlebih dahulu.")
+        empty_state("No history yet. Check a few URLs first.")
 
 
 def display_history(history_df):
@@ -784,30 +794,30 @@ def display_history(history_df):
         st.metric("Total", len(history_df))
     with col2:
         fake_pct = (history_df['prediction'] == 'FAKE').sum() / len(history_df) * 100
-        st.metric("Hoaks", f"{fake_pct:.0f}%")
+        st.metric("Fake", f"{fake_pct:.0f}%")
     with col3:
         avg_conf = history_df['confidence'].mean()
-        st.metric("Rata-rata keyakinan", f"{avg_conf:.0%}")
+        st.metric("Avg confidence", f"{avg_conf:.0%}")
     with col4:
         unique_domains = history_df['domain'].nunique()
-        st.metric("Domain unik", unique_domains)
+        st.metric("Unique domains", unique_domains)
 
     # Filter options
     col5, col6 = st.columns([1, 3])
 
     with col5:
         filter_prediction = st.selectbox(
-            "Saring vonis:",
-            ["Semua", "FAKE", "REAL"]
+            "Filter verdict:",
+            ["All", "FAKE", "REAL"]
         )
 
     with col6:
-        search_term = st.text_input("Cari judul:", "")
+        search_term = st.text_input("Search titles:", "")
 
     # Apply filters
     filtered_df = history_df.copy()
 
-    if filter_prediction != "Semua":
+    if filter_prediction != "All":
         filtered_df = filtered_df[filtered_df['prediction'] == filter_prediction]
 
     if search_term:
@@ -817,15 +827,15 @@ def display_history(history_df):
 
     # Display filtered history
     if filtered_df.empty:
-        empty_state("Tidak ada baris yang cocok dengan saringan.")
+        empty_state("No rows match the filters.")
     else:
         st.dataframe(filtered_df, hide_index=True, use_container_width=True)
 
     # Export history
-    if st.button("Ekspor riwayat penuh"):
+    if st.button("Export full history"):
         csv = history_df.to_csv(index=False)
         st.download_button(
-            label="Unduh CSV riwayat",
+            label="Download history CSV",
             data=csv,
             file_name=f"history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv"
@@ -834,14 +844,14 @@ def display_history(history_df):
 
 def analytics_tab(history_db):
     """Analytics tab"""
-    section("Analitik", "Agregat dari seribu pemeriksaan terakhir.")
+    section("Analytics", "Aggregates from the last 1000 checks.")
 
     history_df = history_db.get_history(limit=1000)
 
     if not history_df.empty:
         display_analytics(history_df)
     else:
-        empty_state("Belum ada data analitik. Periksa beberapa URL terlebih dahulu.")
+        empty_state("No analytics data yet. Check a few URLs first.")
 
 
 def display_analytics(history_df):
@@ -853,7 +863,7 @@ def display_analytics(history_df):
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Sebaran vonis")
+        st.subheader("Verdict split")
         pred_counts = history_df['prediction'].value_counts()
         fig_pie = px.pie(
             values=pred_counts.values,
@@ -865,32 +875,32 @@ def display_analytics(history_df):
         chart(plotly_base(fig_pie))
 
     with col2:
-        st.subheader("Sebaran keyakinan")
+        st.subheader("Confidence spread")
         fig_hist = px.histogram(
             history_df,
             x='confidence',
             nbins=20,
             color_discrete_sequence=[TEAL],
         )
-        fig_hist.update_xaxes(title='Skor keyakinan', tickformat=".0%")
-        fig_hist.update_yaxes(title='Jumlah')
+        fig_hist.update_xaxes(title='Confidence score', tickformat=".0%")
+        fig_hist.update_yaxes(title='Count')
         chart(plotly_base(fig_hist))
 
     # Domain analysis
-    st.subheader("Domain tersering diperiksa")
+    st.subheader("Most-checked domains")
     domain_counts = history_df['domain'].value_counts().head(10)
     fig_domains = px.bar(
         x=domain_counts.values,
         y=domain_counts.index,
         orientation='h',
-        labels={'x': 'Jumlah pemeriksaan', 'y': 'Domain'},
+        labels={'x': 'Checks', 'y': 'Domain'},
         color_discrete_sequence=[TEAL],
     )
     fig_domains.update_yaxes(categoryorder="total ascending")
     chart(plotly_base(fig_domains))
 
     # Fake news by domain
-    st.subheader("Laju hoaks per domain")
+    st.subheader("Fake rate by domain")
     domain_fake_rate = history_df.groupby('domain').agg({
         'prediction': lambda x: (x == 'FAKE').sum() / len(x) * 100
     }).round(1)
@@ -900,11 +910,11 @@ def display_analytics(history_df):
         x=domain_fake_rate['prediction'],
         y=domain_fake_rate.index,
         orientation='h',
-        labels={'x': 'Laju hoaks (%)', 'y': 'Domain'},
+        labels={'x': 'Fake rate (%)', 'y': 'Domain'},
         color_discrete_sequence=[RUST],
     )
     chart(plotly_base(fig_fake_rate))
-    st.caption("Hanya 10 domain teratas. Domain dengan 1 pemeriksaan bisa menunjukkan 0% atau 100%.")
+    st.caption("Top 10 domains only. A domain checked once can show 0% or 100%.")
 
 
 if __name__ == "__main__":

@@ -11,11 +11,11 @@
 
 ## 🌟 About
 
-A web application for detecting fake news using TF-IDF + Logistic Regression model. Supports text in both English and Indonesian.
+A web application for detecting fake news using TF-IDF + Logistic Regression model. English-language news only (model trained on English news).
 
 ## 🚀 Features
 
-- **Multi-language Support**: Detect news in Indonesian and English
+- **Multi-language Support**: Detect news in English
 - **Single Optimized Model**: Uses optimized TF-IDF + Logistic Regression
 - **Keyword Highlighting**: Shows influential keywords in classification
 - **Interactive Visualization**: Displays confidence scores and prediction probabilities
@@ -93,7 +93,7 @@ A web application for detecting fake news using TF-IDF + Logistic Regression mod
 
 - **TF-IDF + Logistic Regression**
   - Accuracy: > 90%
-  - Supports English and Indonesian
+  - English only
   - Fast and lightweight
 
 ## 🌐 Deployment
@@ -126,11 +126,11 @@ Developed for Final Project - TelkomUniversity © 2025
 
 ## 🌟 Tentang
 
-Aplikasi web untuk deteksi berita palsu (fake news) menggunakan model TF-IDF + Logistic Regression. Mendukung teks dalam Bahasa Indonesia dan Inggris.
+Aplikasi web untuk deteksi berita palsu (fake news) menggunakan model TF-IDF + Logistic Regression. Khusus berita berbahasa Inggris (model dilatih memakai berita Inggris).
 
 ## 🚀 Fitur Utama
 
-- **Dukungan Multi-bahasa**: Deteksi berita dalam Bahasa Indonesia dan Inggris
+- **Dukungan Multi-bahasa**: Deteksi berita berbahasa Inggris
 - **Model Tunggal**: Menggunakan TF-IDF + Logistic Regression yang telah dioptimalkan
 - **Highlight Kata Kunci**: Menampilkan kata-kata kunci yang berpengaruh dalam keputusan klasifikasi
 - **Visualisasi Interaktif**: Menampilkan confidence score dan probabilitas prediksi
@@ -208,7 +208,7 @@ Aplikasi web untuk deteksi berita palsu (fake news) menggunakan model TF-IDF + L
 
 - **TF-IDF + Logistic Regression**
   - Akurasi: > 90%
-  - Mendukung Bahasa Indonesia dan Inggris
+  - Khusus bahasa Inggris
   - Cepat dan ringan
 
 ## 🌐 Deployment
@@ -264,7 +264,7 @@ An application for detecting fake news using machine learning models with a Stre
 
 - **TF-IDF + Logistic Regression**
   - Accuracy: > 90%
-  - Supports English and Indonesian
+  - English only
   - Fast and lightweight
 
 ## 🌐 Deployment
@@ -326,7 +326,7 @@ Aplikasi untuk mendeteksi berita palsu menggunakan model machine learning dengan
 
 - **TF-IDF + Logistic Regression**
   - Akurasi: > 90%
-  - Mendukung Bahasa Indonesia dan Inggris
+  - Khusus bahasa Inggris
   - Cepat dan ringan
 
 ## 🌐 Deployment

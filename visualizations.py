@@ -45,7 +45,7 @@ def highlight_important_words(
         side = "f" if weight > 0 else "r"
         word_highlights[word.lower()] = {
             "cls": f"hl hl-{side}{_tier(weight)}",
-            "tip": f"Bobot {weight:+.3f} — {'mengarah ke hoaks' if weight > 0 else 'mengarah ke valid'}",
+            "tip": f"Weight {weight:+.3f} — {'points toward fake' if weight > 0 else 'points toward real'}",
         }
 
     if not word_highlights:

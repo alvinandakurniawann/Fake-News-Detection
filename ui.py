@@ -174,6 +174,8 @@ def hero() -> None:
           <h1 class="fnd-title">Check the news before you share it.</h1>
           <p class="fnd-lede">Paste a news link and a TF-IDF + Logistic Regression model
           judges its authenticity — and shows the words behind the verdict.</p>
+          <p class="fnd-sub">Trained on 2016-era US political news. Sharp on that turf,
+          skeptical on modern or non-political text — read the verdict as a signal, not a sentence.</p>
           <ol class="fnd-steps">
             <li><span class="n">1</span>Paste the article URL</li>
             <li><span class="n">2</span>Extract &amp; detect</li>

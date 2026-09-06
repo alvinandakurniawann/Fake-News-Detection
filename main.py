@@ -180,7 +180,8 @@ def setup_sidebar():
         if 'detector' in st.session_state and st.session_state.detector:
             model_info = st.session_state.detector.get_model_info()
             st.success(f"Active model: {model_info.get('name', 'TF-IDF + Logistic Regression')}")
-            st.caption("Trained on English news · English pipeline")
+            st.caption("Trained on 2016-era US political news · English pipeline")
+            st.caption("Strong on that distribution; over-flags modern non-political text as fake.")
             st.caption(f"Path: `{model_info.get('path', 'N/A')}`")
         else:
             st.warning("Model not initialized yet")

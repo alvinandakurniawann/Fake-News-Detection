@@ -1,0 +1,13 @@
+[theme]
+# Midnight Analyst — navy gelap + aksen cyan
+primaryColor = "#22D3EE"
+backgroundColor = "#0A0F1C"
+secondaryBackgroundColor = "#101828"
+textColor = "#E8EEF4"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

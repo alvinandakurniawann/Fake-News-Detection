@@ -9,10 +9,8 @@ venv/
 ENV/
 .venv
 
-# Streamlit
-.streamlit/secrets.toml
-.streamlit/
-.streamlit/*.toml
+# Streamlit (hanya secrets yang diabaikan; config.toml tema ikut commit)
+.streamlit/*
 !.streamlit/config.toml
 !.streamlit/secrets.toml.example
 

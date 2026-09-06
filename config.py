@@ -19,13 +19,22 @@ class Config:
         Returns:
             Dict with supabase_url and supabase_key
         """
-        # Try to get from Streamlit secrets first
-        if hasattr(st, 'secrets'):
-            supabase_url = st.secrets.get("SUPABASE_URL", "")
-            supabase_key = st.secrets.get("SUPABASE_KEY", "")
-        else:
-            # Fallback to environment variables
+        # Try to get from Streamlit secrets first.
+        # Akses dibungkus try/except: Streamlit baru melempar
+        # StreamlitSecretNotFoundError bila file secrets tidak ada.
+        supabase_url = ""
+        supabase_key = ""
+        try:
+            if hasattr(st, 'secrets'):
+                supabase_url = st.secrets.get("SUPABASE_URL", "") or ""
+                supabase_key = st.secrets.get("SUPABASE_KEY", "") or ""
+        except Exception:
+            pass
+
+        # Fallback to environment variables
+        if not supabase_url:
             supabase_url = os.getenv("SUPABASE_URL", "")
+        if not supabase_key:
             supabase_key = os.getenv("SUPABASE_KEY", "")
         
         return {

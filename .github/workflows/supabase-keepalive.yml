@@ -29,3 +29,4 @@ jobs:
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY"
           echo "Keep-alive OK"
+          echo "Keep-alive OK"
